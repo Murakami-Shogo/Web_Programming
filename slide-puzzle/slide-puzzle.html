@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>スライドパズル</title>
+  <style>
+    body {
+      width: 1000px;
+      margin: auto;
+      background-color: #f0f8ff;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
+      text-align: center;
+    }
+    h2 {
+      background: #b0dcfa;
+      padding: 0.5em;
+      color: white;
+      border-radius: 0.5em;
+    }
+    table.manual {
+      margin: 0 auto;
+      background: #f5f5f5;
+      border-collapse: collapse;
+    }
+    table.manual td {
+      padding: 6px 10px;
+      text-align: left;
+    }
+    .board {
+      line-height: 0;
+      display: inline-block;
+    }
+    .board img.piece {
+      width: 160px; /* 元の画像サイズに合わせて必要なら調整 */
+      height: 160px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .warning { color: red; }
+  </style>
+</head>
+
+<body>
+  <h2>スライドパズル</h2>
+
+  <table class="manual" border="1" cellspacing="0" cellpadding="2">
+    <tr><td>～～マニュアル～～</td></tr>
+    <tr><td>・ゲーム開始ボタンを押すと、画像がランダムに配置（必ず解ける配置）されゲームが始まります。</td></tr>
+    <tr><td>・ゲーム中は経過時間と移動回数が更新されていきます。</td></tr>
+    <tr><td>・ピースをクリックして空白のマスと入れ替えてください。</td></tr>
+    <tr><td>・横に2個、または縦に2個繋がっているピースを1クリックで2個同時に動かせます。</td></tr>
+    <tr><td>・ピースを正しい順序に並べると完成です。</td></tr>
+    <tr><td>・完成までの時間が短い順に10位までランキングに表示されます。</td></tr>
+  </table>
+
+  <br><br>
+
+  名前：
+  <input type="text" id="playerName" placeholder="例) yamada"><br><br>
+
+  <input type="button" id="startButton" value="ゲーム開始"><br>
+  <span class="warning">※パズルスライド時、完成時に音が鳴ります</span><br><br>
+
+  移動回数：
+  <img id="moveHundreds" alt="hundreds">
+  <img id="moveTens" alt="tens">
+  <img id="moveOnes" alt="ones">
+  <br><br>
+
+  <span id="elapsedTime">経過時間: 0.000 秒</span><br>
+  <a href="assets/images/kagawa.jpg" target="_blank" rel="noreferrer">元画像</a>
+
+  <br><br>
+
+  <div class="board" id="board">
+    <div>
+      <img class="piece" data-index="0" alt="">
+      <img class="piece" data-index="1" alt="">
+      <img class="piece" data-index="2" alt="">
+    </div>
+    <div>
+      <img class="piece" data-index="3" alt="">
+      <img class="piece" data-index="4" alt="">
+      <img class="piece" data-index="5" alt="">
+    </div>
+    <div>
+      <img class="piece" data-index="6" alt="">
+      <img class="piece" data-index="7" alt="">
+      <img class="piece" data-index="8" alt="">
+    </div>
+  </div>
+
+  <br>
+  <span id="message">ピースを移動させて完成させてみよう</span>
+  <br><br>
+
+  <b>ランキング</b><br>
+  <div id="ranking" align="center"></div>
+
+  <script>
+    "use strict";
+
+    // ===== assets paths =====
+    const ASSETS = {
+      images: {
+        blank: "./assets/images/black1.png",
+        original: (n) => `./assets/images/kagawa${n}.jpg`,
+        digits: (n) => `./assets/images/${n}.png`,
+        solvedLast: "./assets/images/kagawa8.jpg",
+      },
+      audio: {
+        slide: "./assets/audio/slide.mp3",
+        success: "./assets/audio/success.mp3",
+      },
+    };
+
+    // ===== config =====
+    const CONFIG = {
+      size: 3,               // 3x3
+      cellCount: 9,
+      soundPoolSize: 4,
+      maxNameLength: 30,
+    };
+
+    // ===== UI refs =====
+    const ui = {
+      pieces: Array.from(document.querySelectorAll("img.piece")),
+      startButton: document.getElementById("startButton"),
+      playerName: document.getElementById("playerName"),
+      elapsedTime: document.getElementById("elapsedTime"),
+      message: document.getElementById("message"),
+      ranking: document.getElementById("ranking"),
+      moveHundreds: document.getElementById("moveHundreds"),
+      moveTens: document.getElementById("moveTens"),
+      moveOnes: document.getElementById("moveOnes"),
+    };
+
+    // ===== state =====
+    const state = {
+      tiles: [],            // length 9, tile id 0..7 and "blank"
+      blankIndex: 8,
+      moveCount: 0,
+      startTimeMs: 0,
+      isRunning: false,
+      clockRafId: null,
+    };
+
+    // ===== audio (multi-play) =====
+    function createSoundPool(src, poolSize) {
+      const pool = Array.from({ length: poolSize }, () => new Audio(src));
+      let index = 0;
+      return () => {
+        const audio = pool[index];
+        index = (index + 1) % pool.length;
+        try { audio.currentTime = 0; } catch (_) {}
+        audio.play().catch(() => {});
+      };
+    }
+
+    const playSlide = createSoundPool(ASSETS.audio.slide, CONFIG.soundPoolSize);
+    const successSound = new Audio(ASSETS.audio.success);
+
+    // ===== helpers =====
+    function setMoveImages(moveCount) {
+      const hundreds = Math.floor(moveCount / 100);
+      const tens = Math.floor(moveCount / 10) % 10;
+      const ones = moveCount % 10;
+
+      ui.moveHundreds.src = ASSETS.images.digits(hundreds);
+      ui.moveTens.src = ASSETS.images.digits(tens);
+      ui.moveOnes.src = ASSETS.images.digits(ones);
+    }
+
+    function getSavedName() {
+      return localStorage.getItem("playerName") || "";
+    }
+
+    function saveName(name) {
+      localStorage.setItem("playerName", name);
+    }
+
+    function indexToRowCol(index) {
+      return { row: Math.floor(index / CONFIG.size), col: index % CONFIG.size };
+    }
+
+    function rowColToIndex(row, col) {
+      return row * CONFIG.size + col;
+    }
+
+    function isSolved(tiles) {
+      // 0..7 が順番で、最後が blank
+      for (let i = 0; i < 8; i++) {
+        if (tiles[i] !== i) return false;
+      }
+      return tiles[8] === "blank";
+    }
+
+    // 3x3 スライドパズルの「解ける配置」判定
+    // 奇数幅(3)の場合：反転数が偶数なら解ける
+    function isSolvable(tiles) {
+      const arr = tiles.filter(t => t !== "blank"); // 0..7
+      let inversions = 0;
+      for (let i = 0; i < arr.length; i++) {
+        for (let j = i + 1; j < arr.length; j++) {
+          if (arr[i] > arr[j]) inversions++;
+        }
+      }
+      return inversions % 2 === 0;
+    }
+
+    function shuffleTiles() {
+      // tiles = [0..7,"blank"] をシャッフルして解ける配置を作る
+      const base = [0,1,2,3,4,5,6,7,"blank"];
+      while (true) {
+        const tiles = base.slice();
+        for (let i = tiles.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [tiles[i], tiles[j]] = [tiles[j], tiles[i]];
+        }
+        const blankIndex = tiles.indexOf("blank");
+        if (isSolvable(tiles) && !isSolved(tiles) && blankIndex >= 0) {
+          state.tiles = tiles;
+          state.blankIndex = blankIndex;
+          return;
+        }
+      }
+    }
+
+    function renderBoard() {
+      for (let i = 0; i < CONFIG.cellCount; i++) {
+        const tile = state.tiles[i];
+        if (tile === "blank") {
+          ui.pieces[i].src = ASSETS.images.blank;
+          ui.pieces[i].dataset.kind = "blank";
+        } else {
+          ui.pieces[i].src = ASSETS.images.original(tile);
+          ui.pieces[i].dataset.kind = "tile";
+          ui.pieces[i].dataset.tileId = String(tile);
+        }
+      }
+    }
+
+    function startClock() {
+      const tick = () => {
+        if (!state.isRunning) return;
+        const elapsedSec = (performance.now() - state.startTimeMs) / 1000;
+        ui.elapsedTime.textContent = `経過時間: ${elapsedSec.toFixed(3)} 秒`;
+        state.clockRafId = requestAnimationFrame(tick);
+      };
+      state.clockRafId = requestAnimationFrame(tick);
+    }
+
+    function stopClock() {
+      if (state.clockRafId !== null) {
+        cancelAnimationFrame(state.clockRafId);
+        state.clockRafId = null;
+      }
+    }
+
+    function beginGame() {
+      if (state.isRunning) return;
+
+      const saved = getSavedName();
+      if (saved && !ui.playerName.value) ui.playerName.value = saved;
+
+      state.isRunning = true;
+      state.moveCount = 0;
+      state.startTimeMs = performance.now();
+      ui.message.textContent = "ピースを移動させて完成させてみよう";
+
+      setMoveImages(0);
+      shuffleTiles();
+      renderBoard();
+      startClock();
+    }
+
+    function endGameAndSubmit() {
+      state.isRunning = false;
+      stopClock();
+
+      const elapsedSec = (performance.now() - state.startTimeMs) / 1000;
+
+      let name = ui.playerName.value.trim();
+      if (!name) {
+        name = (prompt(`あなたのタイムは ${elapsedSec.toFixed(3)} 秒でした\nお名前を入れてください`, "") || "").trim();
+        ui.playerName.value = name;
+      }
+      if (name.length > CONFIG.maxNameLength) {
+        name = name.slice(0, CONFIG.maxNameLength);
+        ui.playerName.value = name;
+      }
+      saveName(name);
+
+      // 完成演出：最後の1枚を表示（元コード踏襲）
+      ui.pieces[8].src = ASSETS.images.solvedLast;
+
+      successSound.currentTime = 0;
+      successSound.play().catch(() => {});
+
+      ui.message.innerHTML = '<span style="color:red;font-weight:bold;">完成です</span>';
+
+      submitScore(name, elapsedSec).then(loadRanking);
+      alert(`${name || "名無しさん"} さんのタイムは ${elapsedSec.toFixed(3)} 秒でした。`);
+    }
+
+    async function submitScore(name, timeSec) {
+      try {
+        const body = new URLSearchParams({
+          name,
+          time: timeSec.toFixed(3),
+        });
+
+        await fetch("./submit_puzzle_score.php", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body,
+        });
+      } catch (e) {
+        console.warn("submit failed:", e);
+      }
+    }
+
+    function canSlide(clickedIndex) {
+      const blank = state.blankIndex;
+      const { row: r1, col: c1 } = indexToRowCol(clickedIndex);
+      const { row: r2, col: c2 } = indexToRowCol(blank);
+
+      // 同じ行 or 同じ列で、距離が 1 または 2 の時にスライド可能
+      if (r1 === r2) {
+        const dist = Math.abs(c1 - c2);
+        return dist === 1 || dist === 2;
+      }
+      if (c1 === c2) {
+        const dist = Math.abs(r1 - r2);
+        return dist === 1 || dist === 2;
+      }
+      return false;
+    }
+
+    function slideTowardBlank(clickedIndex) {
+      // clickedIndex と blankIndex が同じ行 or 列のとき、間のタイルを1つずつ空白側へ寄せる
+      const blank = state.blankIndex;
+      const { row: r1, col: c1 } = indexToRowCol(clickedIndex);
+      const { row: r2, col: c2 } = indexToRowCol(blank);
+
+      if (r1 === r2) {
+        // 同じ行：col方向にシフト
+        const step = c1 < c2 ? 1 : -1;
+        for (let col = c2; col !== c1; col -= step) {
+          const fromIndex = rowColToIndex(r1, col - step);
+          const toIndex = rowColToIndex(r1, col);
+          state.tiles[toIndex] = state.tiles[fromIndex];
+        }
+        state.tiles[clickedIndex] = "blank";
+        state.blankIndex = clickedIndex;
+        return;
+      }
+
+      if (c1 === c2) {
+        // 同じ列：row方向にシフト
+        const step = r1 < r2 ? 1 : -1;
+        for (let row = r2; row !== r1; row -= step) {
+          const fromIndex = rowColToIndex(row - step, c1);
+          const toIndex = rowColToIndex(row, c1);
+          state.tiles[toIndex] = state.tiles[fromIndex];
+        }
+        state.tiles[clickedIndex] = "blank";
+        state.blankIndex = clickedIndex;
+      }
+    }
+
+    function handlePieceClick(clickedIndex) {
+      if (!state.isRunning) return;
+      if (!canSlide(clickedIndex)) return;
+
+      playSlide();
+      slideTowardBlank(clickedIndex);
+      state.moveCount += 1;
+
+      setMoveImages(state.moveCount);
+      renderBoard();
+
+      if (isSolved(state.tiles)) {
+        endGameAndSubmit();
+      }
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+      })[c]);
+    }
+
+    async function loadRanking() {
+      try {
+        const res = await fetch(`./puzzle_ranking.php?_t=${Date.now()}`);
+        const rows = await res.json();
+
+        let html = '<table border="1" cellspacing="0" cellpadding="6" style="margin:0 auto;">';
+        html += "<tr><th>順位</th><th>時間(秒)</th><th>名前</th><th>日時</th></tr>";
+
+        for (let i = 0; i < rows.length && i < 10; i++) {
+          const r = rows[i];
+          html += `<tr>
+            <td>${i + 1}</td>
+            <td>${escapeHtml(r.time)}</td>
+            <td>${escapeHtml(r.name)}</td>
+            <td>${escapeHtml(r.date)}</td>
+          </tr>`;
+        }
+
+        html += "</table>";
+        ui.ranking.innerHTML = html;
+      } catch (e) {
+        ui.ranking.textContent = "ランキングを読み込めませんでした（PHPサーバが必要です）。";
+      }
+    }
+
+    function init() {
+      // クリックイベント
+      ui.pieces.forEach((img) => {
+        const index = Number(img.dataset.index);
+        img.addEventListener("click", () => handlePieceClick(index));
+      });
+
+      // 移動回数の初期表示（000）
+      setMoveImages(0);
+
+      // 名前の復元
+      const saved = getSavedName();
+      if (saved) ui.playerName.value = saved;
+
+      // 初期盤面は完成状態に寄せる（開始前なので表示用）
+      state.tiles = [0,1,2,3,4,5,6,7,"blank"];
+      state.blankIndex = 8;
+      renderBoard();
+
+      loadRanking();
+    }
+
+    ui.startButton.addEventListener("click", beginGame);
+    init();
+  </script>
+</body>
+</html>
