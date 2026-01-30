@@ -11,6 +11,8 @@
 
 - [人工衛星シミュレーション](https://murakami-shogo.github.io/Web_Programming/Canvas-Simulations/satellite-simulation.html)
 
+[レースゲーム](https://murakami-shogo.github.io/Web_Programming/Racing-Game/index.html)
+
 
 ## モグラ叩きゲーム
 [モグラ叩きゲーム](https://murakami-shogo.github.io/Web_Programming/Whack-a-Mole/index.html)
@@ -73,3 +75,23 @@
 
 #### デモ（スクリーンショット）
 ![デモ](Canvas-Simulations/assets/images/satellite-simulation.png)
+
+
+
+## レースゲーム
+[レースゲーム](https://murakami-shogo.github.io/Web_Programming/Racing-Game/index.html)
+
+簡易レースゲームです。  
+矢印キーで操作し、**ゴールまでのタイム**を競います。  
+プレイ内容（キー入力ログ）を保存し、ランキング上位のプレイを再生できます。
+
+### 操作
+- ↑：加速
+- ↓：減速・後退
+- ← / →：左右移動
+- 緑/青の車に衝突するとゲームオーバー
+
+> ※ランキング保存・ランキング再生は PHP が動く環境が必要です（GitHub Pages では PHP が動きません）
+
+#### デモ（スクリーンショット）
+![デモ](Racing-Game/assets/images/Racing-Game.png)

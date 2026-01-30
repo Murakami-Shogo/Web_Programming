@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>レースゲーム</title>
+
+  <style>
+    body {
+      width: 1000px;
+      margin: auto;
+      background-color: #f0f8ff;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans JP", sans-serif;
+    }
+    h2 {
+      background: #b0dcfa;
+      padding: 0.5em;
+      color: white;
+      border-radius: 0.5em;
+      text-align: center;
+    }
+    .panel {
+      background: #f5f5f5;
+      border-radius: 8px;
+      padding: 12px 16px;
+      width: fit-content;
+      margin: 0 auto;
+    }
+    .stats {
+      text-align: center;
+      font-size: 1.2rem;
+      margin: 10px 0;
+    }
+    .stats span {
+      display: inline-block;
+      min-width: 72px;
+    }
+    .controls {
+      text-align: center;
+      margin-top: 10px;
+    }
+    canvas {
+      display: block;
+      margin: 0 auto;
+      background: #a0a0a0;
+    }
+    #ranking table {
+      margin: 0 auto;
+      background: white;
+      border-collapse: collapse;
+    }
+    #ranking td, #ranking th {
+      padding: 4px 8px;
+      border: 1px solid #999;
+      text-align: center;
+    }
+    .note {
+      text-align: center;
+      color: #c00;
+      margin-top: 6px;
+    }
+  </style>
+
+  <script src="zepto.min.js"></script>
+</head>
+
+<body onload="RaceGame.initStartScreen()" align="center">
+  <h2>レースゲーム</h2>
+
+  <div class="panel">
+    <div style="text-align:left;">
+      ～～マニュアル～～<br>
+      ・スタートボタンを押すとゲームが始まります。<br>
+      ・「↑」加速 / 「↓」減速・後退 / 「←」「→」移動<br>
+      ・赤い自車が、緑/青の車に衝突するとゲームオーバーです。<br>
+      ・ゲーム終了後「直前プレイを再生」で自分のプレイを再生できます。<br>
+      ・ランキングの順位をクリックすると、そのプレイを再生できます（PHPが動く環境のみ）。<br>
+    </div>
+  </div>
+
+  <div class="stats">
+    名前：
+    <input type="text" id="playerName" maxlength="32"
+      onchange='document.cookie = "name=" + this.value + "; max-age=86400"' />
+    <br><br>
+    タイム：<span id="time" style="color:green;">0.00</span>
+    スピード：<span id="speed" style="color:red;">0</span> km/h
+    残り：<span id="remaining" style="color:blue;">500</span> km
+  </div>
+
+  <table border="1" cellspacing="0" align="center"><tr><td>
+    <canvas id="gameCanvas" width="500" height="500"></canvas>
+  </td></tr></table>
+
+  <div class="controls">
+    <input type="button" value=" スタート " onclick="RaceGame.startNewRun()" />
+    <input type="button" value=" 直前プレイを再生 " onclick="RaceGame.playLastRun()" />
+    <div class="note">※ゲーム中・リプレイ中は音が鳴ります</div>
+  </div>
+
+  <br>
+  <b>ランキング（上位10件）</b><br>
+  <div id="ranking"></div>
+
+<script>
+/**
+ * レースゲーム（整理版）
+ * - 変数名/関数名を読みやすく
+ * - 画像/音声を assets/ に集約
+ * - キー入力ログを frames/masks として保存して、PHPで再生可能にする
+ *
+ * 注意: GitHub Pages では PHP が動かないので、ランキング/保存/リプレイは
+ * PHP が動く環境（ローカル php -S やレンタルサーバ）で確認してください。
+ */
+
+const RaceGame = (() => {
+  "use strict";
+
+  // ====== DOM ======
+  const canvas = document.getElementById("gameCanvas");
+  const ctx = canvas.getContext("2d");
+
+  const elName = document.getElementById("playerName");
+  const elTime = document.getElementById("time");
+  const elSpeed = document.getElementById("speed");
+  const elRemaining = document.getElementById("remaining");
+  const elRanking = document.getElementById("ranking");
+
+  // ====== Assets ======
+  const images = {
+    player: new Image(),
+    playerLeft: new Image(),
+    playerRight: new Image(),
+    enemyGreen: new Image(),
+    enemyBlue: new Image(),
+  };
+
+  images.player.src = "assets/images/player-car.png";
+  images.playerLeft.src = "assets/images/player-car-left.png";
+  images.playerRight.src = "assets/images/player-car-right.png";
+  images.enemyGreen.src = "assets/images/enemy-car-green.png";
+  images.enemyBlue.src = "assets/images/enemy-car-blue.png";
+
+  const bgm = new Audio("assets/audio/bgm-race.mp3");
+  bgm.loop = true;
+
+  function createPolyphonicSfx(src, voices = 4) {
+    const pool = Array.from({ length: voices }, () => new Audio(src));
+    let idx = 0;
+    return {
+      play() {
+        pool[idx].currentTime = 0;
+        pool[idx].play();
+        idx = (idx + 1) % pool.length;
+      }
+    };
+  }
+
+  const sfxAccelerate = createPolyphonicSfx("assets/audio/sfx-accelerate.mp3");
+  const sfxBrake      = createPolyphonicSfx("assets/audio/sfx-brake.mp3");
+  const sfxCrash      = createPolyphonicSfx("assets/audio/sfx-crash.mp3");
+  const sfxFinish     = createPolyphonicSfx("assets/audio/sfx-finish.mp3");
+
+  // ====== RNG (Xorshift32-like) ======
+  const rngState = { x:123456789, y:362436069, z:521288629, w:88675123 };
+  const DEFAULT_SEED = 88675123;
+
+  function rngInit(seed) {
+    rngState.x = 123456789;
+    rngState.y = 362436069;
+    rngState.z = 521288629;
+    rngState.w = (seed === undefined) ? DEFAULT_SEED : seed;
+  }
+
+  function rng() {
+    let t = (rngState.x ^ (rngState.x << 11));
+    rngState.x = rngState.y;
+    rngState.y = rngState.z;
+    rngState.z = rngState.w;
+    rngState.w = (rngState.w ^ (rngState.w >>> 19)) ^ (t ^ (t >>> 8));
+    return (rngState.w >>> 0) / 4294967296;
+  }
+
+  // ====== Input ======
+  const KEY = { LEFT: 37, UP: 38, RIGHT: 39, DOWN: 40 };
+  const pressed = Object.create(null);
+
+  window.addEventListener("keydown", (e) => {
+    pressed[e.keyCode] = true;
+    if ([KEY.LEFT, KEY.UP, KEY.RIGHT, KEY.DOWN].includes(e.keyCode)) e.preventDefault();
+  });
+
+  window.addEventListener("keyup", (e) => {
+    pressed[e.keyCode] = false;
+  });
+
+  // bitmask: 1=LEFT, 2=UP, 4=RIGHT, 8=DOWN
+  const INPUT_MASK = { LEFT: 1, UP: 2, RIGHT: 4, DOWN: 8 };
+
+  // ====== Game State ======
+  let playerX, playerY, playerSpeed;
+  let enemies;
+  let remainingDistance;
+  let isCrashed;
+  let startTimeMs;
+  let tick;
+  let timerId;
+
+  // recording
+  let inputLog;           // {tick: mask}
+  let lastRunInputLog;    // 直前プレイのログ
+  let isPlayback;
+  let showStartScreen;
+  let crashSoundPlayed;
+
+  function readCookieName() {
+    return document.cookie.replace(/(?:(?:^|.*;\s*)name\s*\=\s*([^;]*).*$)|^.*$/, "$1");
+  }
+
+  function clamp(val, min, max) {
+    return Math.max(min, Math.min(max, val));
+  }
+
+  function formatSeconds(sec) {
+    // 小数2桁で統一（ランキングの一致判定を安定させる）
+    return (Math.round(sec * 100) / 100).toFixed(2);
+  }
+
+  function resetStateForRun() {
+    playerX = 234;
+    playerY = 360;
+    playerSpeed = 0;
+
+    enemies = [];
+    remainingDistance = 50000; // 表示は /100 => 500km
+    isCrashed = false;
+    crashSoundPlayed = false;
+
+    startTimeMs = Date.now();
+    tick = 0;
+    timerId = null;
+
+    rngInit(DEFAULT_SEED);
+  }
+
+  function stopLoop() {
+    if (timerId !== null) {
+      clearTimeout(timerId);
+      timerId = null;
+    }
+  }
+
+  function stopAudio() {
+    bgm.pause();
+    bgm.currentTime = 0;
+  }
+
+  function drawRoad() {
+    ctx.fillStyle = "#a0a0a0";
+    ctx.fillRect(0, 0, 500, 500);
+
+    // センターライン（白）
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(245, (50000 - remainingDistance) % 750 - 250, 10, 250);
+
+    // STARTラインと文字
+    if (remainingDistance > 49925) {
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "40px 'ＭＳ ゴシック'";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "bottom";
+      ctx.fillText("START", 0, 50350 - remainingDistance);
+      ctx.fillRect(0, 50350 - remainingDistance, 500, 10);
+    }
+  }
+
+  function drawPlayer(maskForThisTick) {
+    // 左右入力中は向き画像に切り替え
+    const left = (maskForThisTick & INPUT_MASK.LEFT) !== 0;
+    const right = (maskForThisTick & INPUT_MASK.RIGHT) !== 0;
+
+    if (left) ctx.drawImage(images.playerLeft, playerX, playerY);
+    else if (right) ctx.drawImage(images.playerRight, playerX, playerY);
+    else ctx.drawImage(images.player, playerX, playerY);
+  }
+
+  function spawnEnemies() {
+    // 前方から出現
+    if (rng() < 0.001 * playerSpeed + 0.01) {
+      const kind = (rng() < 0.5) ? images.enemyGreen : images.enemyBlue;
+      enemies.push({
+        kind,
+        x: rng() * 470,
+        y: -32,
+        size: 16,
+        speed: rng() * 50
+      });
+    }
+    // 後方から出現
+    if (rng() < 0.01) {
+      enemies.push({
+        kind: images.enemyGreen,
+        x: rng() * 470,
+        y: 500,
+        size: 16,
+        speed: rng() * 50
+      });
+    }
+  }
+
+  function moveEnemies() {
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i];
+
+      // x 方向は自車を追いかけるっぽい挙動
+      if (playerX > e.x) e.x += (rng() - 0.3) * 3;
+      else e.x -= (rng() - 0.3) * 3;
+
+      // 相対速度で y が動く
+      e.y += (playerSpeed - e.speed) / 10;
+
+      // 画面外（遠く）へ行ったら削除
+      if (e.y <= -100 || e.y >= 2000) {
+        enemies.splice(i, 1);
+        i--;
+      }
+    }
+  }
+
+  function drawEnemiesAndCheckCollision() {
+    for (const e of enemies) {
+      ctx.drawImage(e.kind, e.x, e.y);
+
+      const dx = (playerX - e.x);
+      const dy = (playerY - e.y);
+      if ((dx * dx + dy * dy) < (14 + e.size) * (14 + e.size)) {
+        isCrashed = true;
+      }
+    }
+  }
+
+  function renderCrashMessage() {
+    ctx.fillStyle = "#000000";
+    ctx.font = "60px 'ＭＳ ゴシック'";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    ctx.fillText("衝突しました", 250, 250);
+  }
+
+  function renderStartMessage() {
+    drawRoad();
+    ctx.fillStyle = "#000000";
+    ctx.font = "28px 'ＭＳ ゴシック'";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("スタートを押して開始", 250, 230);
+    ctx.fillText("↑↓←→ で操作", 250, 270);
+  }
+
+  function updateStats(elapsedSeconds) {
+    elSpeed.textContent = String(playerSpeed);
+    elTime.textContent = formatSeconds(elapsedSeconds);
+    elRemaining.textContent = String(Math.max(0, Math.floor(remainingDistance / 100)));
+  }
+
+  function buildInputMaskFromPressed() {
+    let mask = 0;
+    if (pressed[KEY.LEFT])  mask |= INPUT_MASK.LEFT;
+    if (pressed[KEY.UP])    mask |= INPUT_MASK.UP;
+    if (pressed[KEY.RIGHT]) mask |= INPUT_MASK.RIGHT;
+    if (pressed[KEY.DOWN])  mask |= INPUT_MASK.DOWN;
+    return mask;
+  }
+
+  function applyInputMask(mask, recordIfPlaying) {
+    if (mask & INPUT_MASK.LEFT) {
+      playerX = clamp(playerX - 4, 0, 470);
+      if (recordIfPlaying) inputLog[tick] = (inputLog[tick] || 0) | INPUT_MASK.LEFT;
+    }
+    if (mask & INPUT_MASK.UP) {
+      playerSpeed = clamp(playerSpeed + 1, -1, 100);
+      if (recordIfPlaying) inputLog[tick] = (inputLog[tick] || 0) | INPUT_MASK.UP;
+      sfxAccelerate.play();
+    }
+    if (mask & INPUT_MASK.RIGHT) {
+      playerX = clamp(playerX + 4, 0, 470);
+      if (recordIfPlaying) inputLog[tick] = (inputLog[tick] || 0) | INPUT_MASK.RIGHT;
+    }
+    if (mask & INPUT_MASK.DOWN) {
+      playerSpeed = clamp(playerSpeed - 2, -1, 100);
+      if (recordIfPlaying) inputLog[tick] = (inputLog[tick] || 0) | INPUT_MASK.DOWN;
+      sfxBrake.play();
+    }
+  }
+
+  function finishRun(elapsedSeconds) {
+    stopLoop();
+    stopAudio();
+    sfxFinish.play();
+
+    // リプレイ用に保存
+    lastRunInputLog = { ...inputLog };
+
+    // 再生モード（直前プレイ再生）ならサーバ保存はしない
+    if (isPlayback) return;
+
+    // 名前処理（cookie）
+    const cookieName = readCookieName();
+    if (!cookieName) {
+      const entered = prompt(
+        `無事にゴールしました。\nあなたのタイムは ${formatSeconds(elapsedSeconds)} 秒でした\nお名前を入力してください`,
+        ""
+      );
+      const safe = (entered || "").trim().slice(0, 32);
+      document.cookie = "name=" + safe + "; max-age=86400";
+      elName.value = safe;
+    } else {
+      alert(`無事にゴールしました。\n${elName.value}さんのタイムは ${formatSeconds(elapsedSeconds)} 秒でした。`);
+    }
+
+    // 保存（frames/masks にして順序を安定）
+    const frames = Object.keys(inputLog).map(Number).sort((a, b) => a - b);
+    const masks = frames.map(f => inputLog[f]);
+
+    $.post("save.php", {
+      name: elName.value,
+      time: formatSeconds(elapsedSeconds),
+      frames: frames.join("/"),
+      masks: masks.join("/")
+    }, () => {
+      loadRanking();
+    });
+  }
+
+  function updateLoop() {
+    // スタート画面は一度描画して終了（ボタン待ち）
+    if (showStartScreen) {
+      renderStartMessage();
+      return;
+    }
+
+    // 衝突したら停止
+    if (isCrashed) {
+      drawRoad();
+      renderCrashMessage();
+      if (!crashSoundPlayed) {
+        crashSoundPlayed = true;
+        sfxCrash.play();
+        stopAudio();
+      }
+      return;
+    }
+
+    // 入力の取り扱い
+    let maskForThisTick = 0;
+
+    if (!isPlayback) {
+      maskForThisTick = buildInputMaskFromPressed();
+      applyInputMask(maskForThisTick, true);
+    } else {
+      maskForThisTick = inputLog[tick] || 0;
+      applyInputMask(maskForThisTick, false);
+    }
+
+    tick++;
+
+    // 経過時間（表示用）
+    const elapsedSeconds = (Date.now() - startTimeMs) / 1000;
+    updateStats(elapsedSeconds);
+
+    // 距離更新
+    remainingDistance -= playerSpeed;
+    if (remainingDistance <= 0) {
+      remainingDistance = 0;
+      updateStats(elapsedSeconds);
+      finishRun(elapsedSeconds);
+      return;
+    }
+
+    // 描画
+    drawRoad();
+    drawPlayer(maskForThisTick);
+
+    moveEnemies();
+    spawnEnemies();
+    drawEnemiesAndCheckCollision();
+
+    // 次フレーム
+    timerId = setTimeout(updateLoop, 20);
+  }
+
+  function loadRanking() {
+    const cacheBuster = Date.now();
+    $.get(`ranking.php?_=${cacheBuster}`, (data) => {
+      const lines = (data || "").trim().split("\n").filter(Boolean);
+
+      let html = '<table><tr><th>順位</th><th>時間</th><th>名前</th><th>日時</th></tr>';
+      for (let i = 0; i < lines.length && i < 10; i++) {
+        const [date, name, time] = lines[i].split(",");
+        const safeName = (name || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const safeTime = (time || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+        html += `<tr>
+          <td><a href="replay.php?time=${encodeURIComponent(safeTime)}">${i + 1}</a></td>
+          <td>${safeTime}</td>
+          <td>${safeName}</td>
+          <td>${date}</td>
+        </tr>`;
+      }
+      html += "</table>";
+      elRanking.innerHTML = html;
+    });
+  }
+
+  // ====== Public API ======
+  function initStartScreen() {
+    // cookie名を反映
+    const cookieName = readCookieName();
+    if (cookieName) elName.value = cookieName;
+
+    // 初期描画
+    showStartScreen = true;
+    isPlayback = false;
+    inputLog = {};
+    lastRunInputLog = null;
+
+    resetStateForRun();
+    stopLoop();
+    stopAudio();
+    updateStats(0);
+
+    loadRanking();
+    updateLoop();
+  }
+
+  function startNewRun() {
+    stopLoop();
+    stopAudio();
+
+    showStartScreen = false;
+    isPlayback = false;
+    inputLog = {};
+    resetStateForRun();
+
+    bgm.play();
+    updateLoop();
+  }
+
+  function playLastRun() {
+    if (!lastRunInputLog || Object.keys(lastRunInputLog).length === 0) {
+      alert("直前プレイの記録がありません。まずは一度プレイしてください。");
+      return;
+    }
+
+    stopLoop();
+    stopAudio();
+
+    showStartScreen = false;
+    isPlayback = true;
+    inputLog = { ...lastRunInputLog };
+    resetStateForRun();
+
+    bgm.play();
+    updateLoop();
+  }
+
+  return {
+    initStartScreen,
+    startNewRun,
+    playLastRun,
+  };
+})();
+</script>
+</body>
+</html>
