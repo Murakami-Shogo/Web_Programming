@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>人工衛星シミュレーション</title>
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif; }
+    .row { margin: 4px 0; }
+    canvas { border: 0; }
+  </style>
+</head>
+<body>
+  <h4>人工衛星シミュレーション</h4>
+
+  <div class="row">経過ステップ：<span id="stepCount">0</span></div>
+  <div class="row">
+    同期衛星の座標と速度：
+    <span id="geoPos" style="display:inline-block;width:160px"></span>
+    <span id="geoInfo"></span>
+  </div>
+  <div class="row">
+    人工衛星の座標と速度：
+    <span id="satPos" style="display:inline-block;width:160px"></span>
+    <span id="satInfo"></span>
+  </div>
+
+  <div class="row">地球の中心からの距離：<span id="distance">200</span></div>
+  <div class="row">地球の中心からの最大距離：<span id="maxDistance">200</span></div>
+  <div class="row">地球の中心からの最小距離：<span id="minDistance">200</span></div>
+
+  <input type="button" value="START" id="startButton">
+  <input type="button" value="STOP" id="stopButton">
+  <input type="button" value="RESTART" id="restartButton">
+  <input type="button" value="11.1%加速" id="accelerateButton">
+  <input type="button" value="10.0%減速" id="decelerateButton">
+
+  <br><br>
+
+  <canvas id="trailCanvas" width="800" height="800" style="position:absolute; z-index:0"></canvas>
+  <canvas id="objectCanvas" width="800" height="800" style="position:absolute; z-index:1"></canvas>
+
+  <script>
+    "use strict";
+
+    const trailCanvas = document.getElementById("trailCanvas");
+    const objectCanvas = document.getElementById("objectCanvas");
+    const trailCtx = trailCanvas.getContext("2d");
+    const objectCtx = objectCanvas.getContext("2d");
+
+    const ui = {
+      stepCount: document.getElementById("stepCount"),
+      geoPos: document.getElementById("geoPos"),
+      geoInfo: document.getElementById("geoInfo"),
+      satPos: document.getElementById("satPos"),
+      satInfo: document.getElementById("satInfo"),
+      distance: document.getElementById("distance"),
+      maxDistance: document.getElementById("maxDistance"),
+      minDistance: document.getElementById("minDistance"),
+      startButton: document.getElementById("startButton"),
+      stopButton: document.getElementById("stopButton"),
+      restartButton: document.getElementById("restartButton"),
+      accelerateButton: document.getElementById("accelerateButton"),
+      decelerateButton: document.getElementById("decelerateButton"),
+    };
+
+    const CONFIG = {
+      canvasSize: 800,
+      centerX: 400,
+      centerY: 400,
+      earthRadius: 24,
+      tickMs: 40,
+      GM: 800, // 重力パラメータ（元コードと同じ）
+    };
+
+    const state = {
+      running: false,
+      timerId: null,
+      stepCount: 0,
+
+      geo: { x: 0,   y: -200, vx: -2, vy: 0 },   // 同期衛星（赤）
+      sat: { x: 200, y: 0,    vx: 0,  vy: -2 },  // 人工衛星（緑）
+
+      maxR: 200,
+      minR: 200,
+    };
+
+    function resetCanvas() {
+      // 軌跡（背景）
+      trailCtx.clearRect(0, 0, CONFIG.canvasSize, CONFIG.canvasSize);
+      trailCtx.fillStyle = "black";
+      trailCtx.fillRect(0, 0, CONFIG.canvasSize, CONFIG.canvasSize);
+
+      // 地球
+      trailCtx.fillStyle = "#0080ff";
+      trailCtx.beginPath();
+      trailCtx.arc(CONFIG.centerX, CONFIG.centerY, CONFIG.earthRadius, 0, Math.PI * 2, true);
+      trailCtx.fill();
+
+      // 動体（前面）
+      objectCtx.clearRect(0, 0, CONFIG.canvasSize, CONFIG.canvasSize);
+    }
+
+    function resetState() {
+      state.stepCount = 0;
+      state.geo = { x: 0,   y: -200, vx: -2, vy: 0 };
+      state.sat = { x: 200, y: 0,    vx: 0,  vy: -2 };
+      state.maxR = 200;
+      state.minR = 200;
+
+      ui.stepCount.textContent = "0";
+      ui.maxDistance.textContent = "200";
+      ui.minDistance.textContent = "200";
+      ui.distance.textContent = "200";
+    }
+
+    function stopSimulation() {
+      state.running = false;
+      if (state.timerId !== null) {
+        clearTimeout(state.timerId);
+        state.timerId = null;
+      }
+    }
+
+    function startSimulation() {
+      stopSimulation();
+      resetCanvas();
+      resetState();
+      state.running = true;
+      tick();
+    }
+
+    function restartSimulation() {
+      if (state.running) return;
+      state.running = true;
+      tick();
+    }
+
+    function accelerateSatellite() {
+      state.sat.vx *= 1.111111; // 11.1%加速
+      state.sat.vy *= 1.111111;
+    }
+
+    function decelerateSatellite() {
+      state.sat.vx *= 0.9; // 10%減速
+      state.sat.vy *= 0.9;
+    }
+
+    function format2(n) {
+      const v = Math.round(n * 100) / 100;
+      return v.toFixed(2);
+    }
+
+    function drawTrailPoint(x, y, color) {
+      trailCtx.fillStyle = color;
+      trailCtx.fillRect(x, y, 1, 1);
+    }
+
+    function drawObject(x, y, color) {
+      objectCtx.fillStyle = color;
+      objectCtx.beginPath();
+      objectCtx.arc(x, y, 8, 0, Math.PI * 2, true);
+      objectCtx.fill();
+    }
+
+    function stepBody(body) {
+      // 加速度 a = -GM * r / |r|^3
+      const r2 = body.x * body.x + body.y * body.y;
+      const r = Math.sqrt(r2);
+      const r3 = r * r2;
+
+      body.vx += -CONFIG.GM * body.x / r3;
+      body.vy += -CONFIG.GM * body.y / r3;
+      body.x += body.vx;
+      body.y += body.vy;
+
+      // エネルギー e = -GM/|r| + v^2/2
+      const v2 = body.vx * body.vx + body.vy * body.vy;
+      const energy = -CONFIG.GM / r + v2 / 2;
+      const speed = Math.sqrt(v2);
+
+      return { r, speed, energy };
+    }
+
+    function tick() {
+      if (!state.running) return;
+
+      // 前面クリア（衛星だけ再描画）
+      objectCtx.clearRect(0, 0, CONFIG.canvasSize, CONFIG.canvasSize);
+
+      const geoInfo = stepBody(state.geo);
+      const satInfo = stepBody(state.sat);
+
+      // 人工衛星の距離表示と最大/最小更新（★元コードの r 未定義バグを修正）
+      ui.distance.textContent = String(Math.round(satInfo.r));
+
+      if (satInfo.r < state.minR) {
+        state.minR = satInfo.r;
+        ui.minDistance.textContent = String(Math.round(state.minR));
+      }
+      if (satInfo.r > state.maxR) {
+        state.maxR = satInfo.r;
+        ui.maxDistance.textContent = String(Math.round(state.maxR));
+      }
+
+      // 表示更新
+      state.stepCount += 1;
+      ui.stepCount.textContent = String(state.stepCount);
+
+      ui.geoPos.textContent = `x=${Math.trunc(state.geo.x)} y=${Math.trunc(state.geo.y)}`;
+      ui.geoInfo.textContent = `v=${format2(geoInfo.speed)} e=${format2(geoInfo.energy)}`;
+
+      ui.satPos.textContent = `x=${Math.trunc(state.sat.x)} y=${Math.trunc(state.sat.y)}`;
+      ui.satInfo.textContent = `v=${format2(satInfo.speed)} e=${format2(satInfo.energy)}`;
+
+      // 軌跡（背景）に点を打つ
+      drawTrailPoint(Math.round(state.geo.x + CONFIG.centerX), Math.round(state.geo.y + CONFIG.centerY), "#ff0000");
+      drawTrailPoint(Math.round(state.sat.x + CONFIG.centerX), Math.round(state.sat.y + CONFIG.centerY), "#00ff00");
+
+      // 前景に衛星を描く
+      drawObject(state.geo.x + CONFIG.centerX, state.geo.y + CONFIG.centerY, "#ff0000");
+      drawObject(state.sat.x + CONFIG.centerX, state.sat.y + CONFIG.centerY, "#00ff00");
+
+      state.timerId = setTimeout(tick, CONFIG.tickMs);
+    }
+
+    ui.startButton.addEventListener("click", startSimulation);
+    ui.stopButton.addEventListener("click", stopSimulation);
+    ui.restartButton.addEventListener("click", restartSimulation);
+    ui.accelerateButton.addEventListener("click", accelerateSatellite);
+    ui.decelerateButton.addEventListener("click", decelerateSatellite);
+
+    // 初期表示
+    resetCanvas();
+    resetState();
+  </script>
+</body>
+</html>

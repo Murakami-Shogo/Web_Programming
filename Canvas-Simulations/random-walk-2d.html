@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>2次元ランダムウォーク</title>
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif; }
+  </style>
+</head>
+<body>
+  <h4>ランダムウォークとは</h4>
+  ・ランダムウォークは、次に現れる位置が確率的に無作為（ランダム）に決定される運動である。<br>
+  ・1次元ランダムウォークでは、横軸は時間で、点が2分の1の確率で上または下に移動する。<br>
+  ・2次元ランダムウォークでは、点が4分の1の確率で上下左右のいずれかの方向に移動する。<br>
+  ・3次元ランダムウォークでは、点が空間を移動する。<br>
+  ・1次元・2次元では、いつか必ず原点に戻ってくることが証明されている。<br>
+  ・3次元以上は必ず戻るとは限らない。<br>
+
+  <h4>2 次元ランダムウォーク</h4>
+  ・停止ボタンで停止、再開で停止位置から再開。<br>
+  ・初期化で軌跡を消して原点から再スタート。<br>
+  ・1秒間に20000回移動する（1000回×20回/秒）。<br><br>
+
+  <canvas id="walkCanvas" width="800" height="800"></canvas><br>
+  移動回数：<span id="moveCount">0</span>&emsp;原点復帰回数：<span id="returnCount">0</span><br><br>
+
+  <input type="button" value="初期化" id="resetButton">
+  <input type="button" value="停止" id="stopButton">
+  <input type="button" value="再開" id="resumeButton">
+
+  <script>
+    "use strict";
+
+    const canvas = document.getElementById("walkCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const ui = {
+      moveCount: document.getElementById("moveCount"),
+      returnCount: document.getElementById("returnCount"),
+      resetButton: document.getElementById("resetButton"),
+      stopButton: document.getElementById("stopButton"),
+      resumeButton: document.getElementById("resumeButton"),
+    };
+
+    const CONFIG = {
+      tickMs: 50,
+      stepsPerTick: 1000, // 1000 steps / 50ms => 20000 steps/s
+      width: 800,
+      height: 800,
+      originX: 400,
+      originY: 400,
+      backgroundColor: "black",
+    };
+
+    const state = {
+      x: CONFIG.originX,
+      y: CONFIG.originY,
+      moves: 0,
+      returns: 0,
+      timerId: null,
+      running: false,
+      // 点の色（RGB）
+      color: { r: 128, g: 128, b: 128 },
+    };
+
+    function drawBackground() {
+      ctx.fillStyle = CONFIG.backgroundColor;
+      ctx.fillRect(0, 0, CONFIG.width, CONFIG.height);
+    }
+
+    function drawPoint(x, y, color) {
+      ctx.fillStyle = `rgb(${color.r},${color.g},${color.b})`;
+      ctx.fillRect(x, y, 1, 1);
+    }
+
+    function updateCounters() {
+      ui.moveCount.textContent = String(state.moves);
+      ui.returnCount.textContent = String(state.returns);
+    }
+
+    function wrapPosition() {
+      if (state.x >= CONFIG.width) state.x = 0;
+      if (state.x < 0) state.x = CONFIG.width - 1;
+      if (state.y >= CONFIG.height) state.y = 0;
+      if (state.y < 0) state.y = CONFIG.height - 1;
+    }
+
+    function randomWalkStep() {
+      const r = Math.random();
+      if (r < 0.25) state.x += 1;
+      else if (r < 0.50) state.x -= 1;
+      else if (r < 0.75) state.y += 1;
+      else state.y -= 1;
+
+      wrapPosition();
+
+      state.moves += 1;
+      if (state.x === CONFIG.originX && state.y === CONFIG.originY) {
+        state.returns += 1;
+      }
+
+      // 色を少し変化（R/G/Bのどれか1つを±2）
+      const channel = Math.floor(Math.random() * 3); // 0:R 1:G 2:B
+      const delta = (Math.random() < 0.5) ? -2 : 2;
+
+      if (channel === 0) state.color.r = Math.max(0, Math.min(255, state.color.r + delta));
+      if (channel === 1) state.color.g = Math.max(0, Math.min(255, state.color.g + delta));
+      if (channel === 2) state.color.b = Math.max(0, Math.min(255, state.color.b + delta));
+
+      drawPoint(state.x, state.y, state.color);
+    }
+
+    function tick() {
+      if (!state.running) return;
+
+      for (let i = 0; i < CONFIG.stepsPerTick; i++) {
+        randomWalkStep();
+      }
+
+      updateCounters();
+      state.timerId = setTimeout(tick, CONFIG.tickMs);
+    }
+
+    function resetSimulation() {
+      stopSimulation();
+      state.x = CONFIG.originX;
+      state.y = CONFIG.originY;
+      state.moves = 0;
+      state.returns = 0;
+      state.color = { r: 128, g: 128, b: 128 };
+
+      drawBackground();
+      drawPoint(state.x, state.y, state.color);
+      updateCounters();
+    }
+
+    function stopSimulation() {
+      state.running = false;
+      if (state.timerId !== null) {
+        clearTimeout(state.timerId);
+        state.timerId = null;
+      }
+    }
+
+    function resumeSimulation() {
+      if (state.running) return;
+      state.running = true;
+      tick();
+    }
+
+    ui.resetButton.addEventListener("click", resetSimulation);
+    ui.stopButton.addEventListener("click", stopSimulation);
+    ui.resumeButton.addEventListener("click", resumeSimulation);
+
+    resetSimulation();
+    resumeSimulation();
+  </script>
+</body>
+</html>

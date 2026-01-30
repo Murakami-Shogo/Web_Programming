@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>アナログ時計</title>
+  <style>
+    body {
+      width: 1000px;
+      margin: auto;
+      background-color: #f0f8ff;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <h3>アナログ時計</h3>
+  <canvas id="clockCanvas" width="300" height="300"></canvas>
+  <br>
+  正午と午後6時に鐘の音が鳴ります。
+
+  <script>
+    "use strict";
+
+    const canvas = document.getElementById("clockCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const bellAudio = new Audio("./assets/audio/bell.mp3");
+    let lastChimeKey = ""; // 同じ秒で複数回鳴らさないため
+
+    const CENTER_X = 150;
+    const CENTER_Y = 150;
+    const RADIUS = 100;
+
+    function drawFace() {
+      ctx.clearRect(0, 0, 300, 300);
+
+      // 外枠
+      ctx.fillStyle = "#f0ffff";
+      ctx.strokeStyle = "#000000";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(CENTER_X, CENTER_Y, RADIUS, 0, Math.PI * 2, true);
+      ctx.fill();
+      ctx.stroke();
+
+      // 1〜12
+      ctx.fillStyle = "#000000";
+      ctx.font = "24px 'ＭＳ ゴシック'";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      for (let i = 1; i <= 12; i++) {
+        const angle = 2 * Math.PI * i / 12;
+        const x = CENTER_X + 84 * Math.sin(angle);
+        const y = CENTER_Y - 84 * Math.cos(angle);
+        ctx.fillText(String(i), x, y);
+      }
+
+      // 目盛り
+      for (let i = 0; i < 60; i++) {
+        const angle = 2 * Math.PI * i / 60;
+        const inner = i % 5 === 0 ? 90 : 95;
+        const outer = 100;
+
+        const x1 = CENTER_X + inner * Math.sin(angle);
+        const y1 = CENTER_Y - inner * Math.cos(angle);
+        const x2 = CENTER_X + outer * Math.sin(angle);
+        const y2 = CENTER_Y - outer * Math.cos(angle);
+
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.strokeStyle = (i % 5 === 0) ? "#000000" : "#808080";
+        ctx.lineWidth = (i % 5 === 0) ? 2 : 1;
+        ctx.stroke();
+      }
+    }
+
+    function drawHand(angleRad, length, color, width) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(CENTER_X, CENTER_Y);
+      ctx.lineTo(
+        CENTER_X + length * Math.sin(angleRad),
+        CENTER_Y - length * Math.cos(angleRad)
+      );
+      ctx.stroke();
+    }
+
+    function tryChime(date) {
+      const hh = date.getHours();
+      const mm = date.getMinutes();
+      const ss = date.getSeconds();
+
+      // 12:00:00 または 18:00:00
+      const isChimeTime = ((hh === 12 || hh === 18) && mm === 0 && ss === 0);
+      const key = `${hh}:${mm}:${ss}`;
+
+      if (isChimeTime && lastChimeKey !== key) {
+        lastChimeKey = key;
+        bellAudio.currentTime = 0;
+        bellAudio.play().catch(() => {});
+      }
+    }
+
+    function drawClock() {
+      const date = new Date();
+      const hh = date.getHours();
+      const mm = date.getMinutes();
+      const ss = date.getSeconds();
+
+      drawFace();
+      tryChime(date);
+
+      // 秒針
+      drawHand(2 * Math.PI * ss / 60, 95, "#ff0000", 2);
+
+      // 分針
+      drawHand(2 * Math.PI * mm / 60, 90, "#000000", 3);
+
+      // 時針（分も反映）
+      drawHand(2 * Math.PI * (hh * 60 + mm) / 720, 60, "#000000", 5);
+
+      // 中心点
+      ctx.fillStyle = "#ffffe0";
+      ctx.strokeStyle = "#000000";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(CENTER_X, CENTER_Y, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    drawClock();
+    setInterval(drawClock, 1000);
+  </script>
+</body>
+</html>

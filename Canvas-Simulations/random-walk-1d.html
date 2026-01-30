@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>1次元ランダムウォーク</title>
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif; }
+  </style>
+</head>
+<body>
+  <h4>1 次元ランダムウォーク</h4>
+  <canvas id="walkCanvas" width="1000" height="200"></canvas><br>
+  移動回数：<span id="moveCount">0</span>&emsp;原点復帰回数：<span id="returnCount">0</span><br><br>
+
+  <input type="button" value="開始" id="startButton">
+  <input type="button" value="停止" id="stopButton">
+  <input type="button" value="再スタート" id="resetButton">
+
+  <pre>
+n 回移動したとき、1 から n 回移動する間に原点に戻った回数の期待値： √(2n/π)
+ 100 回移動 8 回
+ 300 回移動 14 回
+ 500 回移動 18 回
+ 1000 回移動 25 回
+ 10000 回移動 80 回
+ 100000 回移動 252 回
+1000000 回移動 798 回
+  </pre>
+
+  <script>
+    "use strict";
+
+    const canvas = document.getElementById("walkCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const ui = {
+      moveCount: document.getElementById("moveCount"),
+      returnCount: document.getElementById("returnCount"),
+      startButton: document.getElementById("startButton"),
+      stopButton: document.getElementById("stopButton"),
+      resetButton: document.getElementById("resetButton"),
+    };
+
+    const CONFIG = {
+      tickMs: 50,
+      originY: 100,
+      backgroundColor: "black",
+      baselineColor: "white",
+      pointColor: "#00ff00",
+    };
+
+    const state = {
+      x: 0,
+      y: CONFIG.originY,
+      moves: 0,
+      returns: 0,
+      timerId: null,
+      running: false,
+    };
+
+    function drawBackground() {
+      ctx.fillStyle = CONFIG.backgroundColor;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = CONFIG.baselineColor;
+      ctx.fillRect(0, CONFIG.originY, canvas.width, 1);
+    }
+
+    function drawPoint(x, y) {
+      ctx.fillStyle = CONFIG.pointColor;
+      ctx.fillRect(x, y, 1, 1);
+    }
+
+    function updateCounters() {
+      ui.moveCount.textContent = String(state.moves);
+      ui.returnCount.textContent = String(state.returns);
+    }
+
+    function resetSimulation() {
+      stopSimulation();
+      state.x = 0;
+      state.y = CONFIG.originY;
+      state.moves = 0;
+      state.returns = 0;
+      drawBackground();
+      drawPoint(state.x, state.y);
+      updateCounters();
+    }
+
+    function stepSimulation() {
+      if (!state.running) return;
+
+      // 右端まで描いたら停止（キャンバス外に描かない）
+      if (state.x >= canvas.width - 1) {
+        stopSimulation();
+        return;
+      }
+
+      state.x += 1;
+      state.y += (Math.random() < 0.5 ? 1 : -1);
+
+      state.moves += 1;
+      if (state.y === CONFIG.originY) state.returns += 1;
+
+      drawPoint(state.x, state.y);
+      updateCounters();
+
+      state.timerId = setTimeout(stepSimulation, CONFIG.tickMs);
+    }
+
+    function startSimulation() {
+      if (state.running) return;
+      state.running = true;
+      stepSimulation();
+    }
+
+    function stopSimulation() {
+      state.running = false;
+      if (state.timerId !== null) {
+        clearTimeout(state.timerId);
+        state.timerId = null;
+      }
+    }
+
+    ui.startButton.addEventListener("click", startSimulation);
+    ui.stopButton.addEventListener("click", stopSimulation);
+    ui.resetButton.addEventListener("click", resetSimulation);
+
+    resetSimulation();
+  </script>
+</body>
+</html>
