@@ -18,7 +18,7 @@
 モグラ叩きゲームです。  
 もぐら（+1点）と金のブタ（+5点）を叩き、**合計30点に到達するまでのタイム**を競います。  
 
-### デモ（スクリーンショット）
+#### デモ（スクリーンショット）
 ![デモ](Whack-a-Mole/assets/images/demo.png)
 
 
@@ -35,7 +35,7 @@
 - 横または縦に2マス分つながっているピースは、1クリックで2枚同時にスライドできます
 - 完成するとタイムが記録されます
 
-### デモ（スクリーンショット）
+#### デモ（スクリーンショット）
 ![デモ](slide-puzzle/assets/images/demo.png)
 
 
@@ -47,22 +47,26 @@
 
 点が確率的に上下へ移動し、原点復帰回数を表示します。
 
+#### デモ（スクリーンショット）
 ![デモ](Canvas-Simulations/assets/images/random-walk-1d.png)
 
 - [2次元ランダムウォーク](https://murakami-shogo.github.io/Web_Programming/Canvas-Simulations/random-walk-2d.html)
 
 点が上下左右に移動し、軌跡を描画します。  
 
+#### デモ（スクリーンショット）
 ![デモ](Canvas-Simulations/assets/images/random-walk-2d.png)
 
 - [アナログ時計](https://murakami-shogo.github.io/Web_Programming/Canvas-Simulations/analog-clock.html)
 
 時計を描画し、正午と午後6時に鐘の音が鳴ります。
 
+#### デモ（スクリーンショット）
 ![デモ](Canvas-Simulations/assets/images/analog-clock.png)
 
 - [人工衛星シミュレーション](https://murakami-shogo.github.io/Web_Programming/Canvas-Simulations/satellite-simulation.html)
 
 重力下での衛星運動を描画し、距離・速度・エネルギーを表示します。
 
+#### デモ（スクリーンショット）
 ![デモ](Canvas-Simulations/assets/images/satellite-simulation.png)
