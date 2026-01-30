@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>もぐらたたき</title>
+  <style>
+    body {
+      width: 1000px;
+      margin: auto;
+      background-color: #f0f8ff;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
+      text-align: center;
+    }
+    h2 {
+      background: #b0dcfa;
+      padding: 0.5em;
+      color: white;
+      border-radius: 0.5em;
+    }
+    table.manual {
+      margin: 0 auto;
+      background: #f5f5f5;
+      border-collapse: collapse;
+    }
+    table.manual td {
+      padding: 6px 10px;
+      text-align: left;
+    }
+    .board {
+      line-height: 0;
+      display: inline-block;
+    }
+    .board img.cell {
+      width: 96px;
+      height: 96px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .warning {
+      color: red;
+    }
+  </style>
+</head>
+
+<body>
+  <h2>もぐらたたきゲーム</h2>
+  <h4>もぐらをたたいて得点が30点以上になるまでの時間を競うゲームです。</h4>
+
+  <table class="manual" border="1" cellspacing="0" cellpadding="2">
+    <tr><td>～～マニュアル～～</td></tr>
+    <tr><td>・ゲーム開始ボタンを押すとゲームが始まります。</td></tr>
+    <tr><td>・モグラをたたくと1点、金のブタをたたくと5点です。それ以外の所をたたいても得点は変動しません。</td></tr>
+    <tr><td>・得点が30点以上になるとゲームが終了します。</td></tr>
+  </table>
+
+  <br>
+
+  得点：
+  <img id="scoreHundreds" alt="hundreds">
+  <img id="scoreTens" alt="tens">
+  <img id="scoreOnes" alt="ones">
+  &nbsp;&nbsp;
+
+  名前：
+  <input type="text" id="playerName" placeholder="例) yamada">
+  <br><br>
+
+  <input type="button" id="startButton" value="ゲーム開始"><br>
+  <span class="warning">※ゲームを開始すると音が鳴ります</span><br><br>
+
+  <span id="elapsedTime">経過時間: 0.000 秒</span>
+
+  <br><br>
+
+  <div class="board" id="board">
+    <!-- 4x4 / 16 cells -->
+    <div>
+      <img class="cell" data-index="0"  alt="">
+      <img class="cell" data-index="1"  alt="">
+      <img class="cell" data-index="2"  alt="">
+      <img class="cell" data-index="3"  alt="">
+    </div>
+    <div>
+      <img class="cell" data-index="4"  alt="">
+      <img class="cell" data-index="5"  alt="">
+      <img class="cell" data-index="6"  alt="">
+      <img class="cell" data-index="7"  alt="">
+    </div>
+    <div>
+      <img class="cell" data-index="8"  alt="">
+      <img class="cell" data-index="9"  alt="">
+      <img class="cell" data-index="10" alt="">
+      <img class="cell" data-index="11" alt="">
+    </div>
+    <div>
+      <img class="cell" data-index="12" alt="">
+      <img class="cell" data-index="13" alt="">
+      <img class="cell" data-index="14" alt="">
+      <img class="cell" data-index="15" alt="">
+    </div>
+  </div>
+
+  <br><br>
+
+  <b>ランキング</b><br>
+  <div id="ranking" align="center"></div>
+
+  <script>
+    "use strict";
+
+    // ===== Assets（あなたが置く場所の前提）=====
+    const ASSETS = {
+      images: {
+        hole: "./assets/images/ana.png",
+        mole: "./assets/images/mogura.png",
+        pig:  "./assets/images/buta.jpg",
+        digit: (n) => `./assets/images/${n}.png`,
+      },
+      audio: {
+        bgm: "./assets/audio/piano.mp3",
+        hitMole: "./assets/audio/punch-1.mp3",
+        hitPig: "./assets/audio/decision-9.mp3",
+        miss: "./assets/audio/wrong-answer-in-quiz-1.mp3",
+      },
+    };
+
+    const CONFIG = {
+      gridSize: 16,
+      updateIntervalMs: 300,
+      targetScore: 30,
+      scoreMole: 1,
+      scorePig: 5,
+      probabilityPig: 0.10,
+      probabilityMole: 0.60,
+      soundPoolSize: 4,
+    };
+
+    const ui = {
+      cells: Array.from(document.querySelectorAll("img.cell")),
+      startButton: document.getElementById("startButton"),
+      elapsedTime: document.getElementById("elapsedTime"),
+      playerName: document.getElementById("playerName"),
+      ranking: document.getElementById("ranking"),
+      scoreHundreds: document.getElementById("scoreHundreds"),
+      scoreTens: document.getElementById("scoreTens"),
+      scoreOnes: document.getElementById("scoreOnes"),
+    };
+
+    const state = {
+      score: 0,
+      startTimeMs: 0,
+      isRunning: false,
+      boardTimerId: null,
+      clockRafId: null,
+    };
+
+    // ===== Audio（多重再生）=====
+    function createSoundPool(src, poolSize) {
+      const pool = Array.from({ length: poolSize }, () => new Audio(src));
+      let index = 0;
+      return () => {
+        const audio = pool[index];
+        index = (index + 1) % pool.length;
+        try { audio.currentTime = 0; } catch (_) {}
+        audio.play().catch(() => {});
+      };
+    }
+
+    const bgm = new Audio(ASSETS.audio.bgm);
+    bgm.loop = true;
+
+    const playHitMole = createSoundPool(ASSETS.audio.hitMole, CONFIG.soundPoolSize);
+    const playHitPig  = createSoundPool(ASSETS.audio.hitPig,  CONFIG.soundPoolSize);
+    const playMiss    = createSoundPool(ASSETS.audio.miss,    CONFIG.soundPoolSize);
+
+    // ===== UI helpers =====
+    function setScoreImages(score) {
+      const hundreds = Math.floor(score / 100);
+      const tens = Math.floor(score / 10) % 10;
+      const ones = score % 10;
+
+      ui.scoreHundreds.src = ASSETS.images.digit(hundreds);
+      ui.scoreTens.src = ASSETS.images.digit(tens);
+      ui.scoreOnes.src = ASSETS.images.digit(ones);
+    }
+
+    function setCellKind(index, kind) {
+      const img = ui.cells[index];
+      if (!img) return;
+
+      if (kind === "mole") img.src = ASSETS.images.mole;
+      else if (kind === "pig") img.src = ASSETS.images.pig;
+      else img.src = ASSETS.images.hole;
+
+      img.dataset.kind = kind;
+    }
+
+    function resetBoard() {
+      for (let i = 0; i < CONFIG.gridSize; i++) {
+        const kind = Math.random() < 0.4 ? "mole" : "hole";
+        setCellKind(i, kind);
+      }
+    }
+
+    // ===== Game loop =====
+    function startGame() {
+      if (state.isRunning) return;
+
+      state.isRunning = true;
+      state.score = 0;
+      state.startTimeMs = performance.now();
+
+      // 名前の復元（cookieより自然）
+      const savedName = localStorage.getItem("playerName");
+      if (savedName && !ui.playerName.value) ui.playerName.value = savedName;
+
+      setScoreImages(state.score);
+      resetBoard();
+      startBoardLoop();
+      startClockLoop();
+
+      bgm.currentTime = 0;
+      bgm.play().catch(() => {});
+    }
+
+    function stopGame() {
+      state.isRunning = false;
+
+      if (state.boardTimerId !== null) {
+        clearTimeout(state.boardTimerId);
+        state.boardTimerId = null;
+      }
+      if (state.clockRafId !== null) {
+        cancelAnimationFrame(state.clockRafId);
+        state.clockRafId = null;
+      }
+
+      bgm.pause();
+    }
+
+    function startBoardLoop() {
+      const updateBoard = () => {
+        if (!state.isRunning) return;
+
+        const r = Math.random();
+        const index = Math.floor(Math.random() * CONFIG.gridSize);
+
+        if (r < CONFIG.probabilityPig) {
+          setCellKind(index, "pig");
+        } else if (r < CONFIG.probabilityPig + CONFIG.probabilityMole) {
+          setCellKind(index, "mole");
+        } else {
+          setCellKind(index, "hole");
+        }
+
+        state.boardTimerId = setTimeout(updateBoard, CONFIG.updateIntervalMs);
+      };
+
+      state.boardTimerId = setTimeout(updateBoard, CONFIG.updateIntervalMs);
+    }
+
+    function startClockLoop() {
+      const tick = () => {
+        if (!state.isRunning) return;
+        const elapsedSec = (performance.now() - state.startTimeMs) / 1000;
+        ui.elapsedTime.textContent = `経過時間: ${elapsedSec.toFixed(3)} 秒`;
+        state.clockRafId = requestAnimationFrame(tick);
+      };
+      state.clockRafId = requestAnimationFrame(tick);
+    }
+
+    async function finalizeAndSubmitScore() {
+      const timeSec = (performance.now() - state.startTimeMs) / 1000;
+
+      let name = ui.playerName.value.trim();
+      if (!name) {
+        name = (prompt(`あなたのタイムは ${timeSec.toFixed(3)} 秒でした\nお名前を入れてください`, "") || "").trim();
+        ui.playerName.value = name;
+      }
+
+      localStorage.setItem("playerName", name);
+
+      // サーバへ送信（POST）
+      try {
+        const body = new URLSearchParams({
+          name,
+          time: timeSec.toFixed(3),
+        });
+
+        await fetch("./submit_score.php", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body,
+        });
+      } catch (e) {
+        // GitHub Pages等ではPHPが動かないので失敗し得る
+        console.warn("submit failed:", e);
+      }
+
+      await loadRanking();
+      alert(`${name || "名無しさん"} さんのタイムは ${timeSec.toFixed(3)} 秒でした。`);
+    }
+
+    function handleCellClick(index) {
+      if (!state.isRunning) return;
+
+      const kind = ui.cells[index].dataset.kind;
+
+      if (kind === "mole") {
+        playHitMole();
+        setCellKind(index, "hole");
+        state.score += CONFIG.scoreMole;
+      } else if (kind === "pig") {
+        playHitPig();
+        setCellKind(index, "hole");
+        state.score += CONFIG.scorePig;
+      } else {
+        playMiss();
+      }
+
+      setScoreImages(state.score);
+
+      if (state.score >= CONFIG.targetScore) {
+        stopGame();
+        finalizeAndSubmitScore();
+      }
+    }
+
+    // ===== Ranking =====
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+      })[c]);
+    }
+
+    async function loadRanking() {
+      try {
+        const res = await fetch(`./ranking.php?_t=${Date.now()}`);
+        const rows = await res.json();
+
+        let html = '<table border="1" cellspacing="0" cellpadding="6" style="margin:0 auto;">';
+        html += "<tr><th>順位</th><th>時間(秒)</th><th>名前</th><th>日時</th></tr>";
+
+        for (let i = 0; i < rows.length && i < 10; i++) {
+          const r = rows[i];
+          html += `<tr>
+            <td>${i + 1}</td>
+            <td>${escapeHtml(r.time)}</td>
+            <td>${escapeHtml(r.name)}</td>
+            <td>${escapeHtml(r.date)}</td>
+          </tr>`;
+        }
+        html += "</table>";
+
+        ui.ranking.innerHTML = html;
+      } catch (e) {
+        ui.ranking.textContent = "ランキングを読み込めませんでした（PHPサーバが必要です）。";
+      }
+    }
+
+    // ===== init =====
+    function init() {
+      // クリックイベント登録
+      ui.cells.forEach((img) => {
+        const index = Number(img.dataset.index);
+        img.addEventListener("click", () => handleCellClick(index));
+      });
+
+      // 初期表示
+      setScoreImages(0);
+      resetBoard();
+      loadRanking();
+    }
+
+    ui.startButton.addEventListener("click", startGame);
+    init();
+  </script>
+</body>
+</html>

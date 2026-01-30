@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>画像チェンジ（サンプル）</title>
+</head>
+<body>
+  <input type="button" value="画像チェンジ" id="changeButton"><br><br>
+  <img
+    id="photo"
+    width="640"
+    border="1"
+    src="http://ns.cs.ehime-u.ac.jp/photo/black.png"
+    alt="sample"
+  >
+
+  <script>
+    "use strict";
+
+    const photoEl = document.getElementById("photo");
+    const changeButton = document.getElementById("changeButton");
+
+    const baseUrl = "http://ns.cs.ehime-u.ac.jp/photo/sample";
+    const minIndex = 1;
+    const maxIndex = 19;
+
+    let currentIndex = 1;
+
+    function showNextImage() {
+      photoEl.src = `${baseUrl}${currentIndex}.jpg`;
+      photoEl.width = 320 + currentIndex * 24;
+
+      currentIndex += 1;
+      if (currentIndex > maxIndex) currentIndex = minIndex;
+    }
+
+    changeButton.addEventListener("click", showNextImage);
+  </script>
+</body>
+</html>
