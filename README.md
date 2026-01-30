@@ -24,4 +24,4 @@
 - 完成するとタイムが記録されます
 
 ### デモ（スクリーンショット）
-![デモ](Slide-Puzzle/assets/images/demo.png)
+![デモ](slide-puzzle/assets/images/demo.png)
