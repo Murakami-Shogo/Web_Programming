@@ -42,29 +42,32 @@
 ## Canvas-Simulations
 描画・アニメーション・シミュレーション系のミニプロジェクト集です。
 
-### 含まれるコンテンツ
-- [1次元ランダムウォーク](https://murakami-shogo.github.io/Web_Programming/Canvas-Simulations/random-walk-1d.html)
+### 1次元ランダムウォーク
+[1次元ランダムウォーク](https://murakami-shogo.github.io/Web_Programming/Canvas-Simulations/random-walk-1d.html)
 
 点が確率的に上下へ移動し、原点復帰回数を表示します。
 
 #### デモ（スクリーンショット）
 ![デモ](Canvas-Simulations/assets/images/random-walk-1d.png)
 
-- [2次元ランダムウォーク](https://murakami-shogo.github.io/Web_Programming/Canvas-Simulations/random-walk-2d.html)
+### 2次元ランダムウォーク
+[2次元ランダムウォーク](https://murakami-shogo.github.io/Web_Programming/Canvas-Simulations/random-walk-2d.html)
 
 点が上下左右に移動し、軌跡を描画します。  
 
 #### デモ（スクリーンショット）
 ![デモ](Canvas-Simulations/assets/images/random-walk-2d.png)
 
-- [アナログ時計](https://murakami-shogo.github.io/Web_Programming/Canvas-Simulations/analog-clock.html)
+### アナログ時計
+[アナログ時計](https://murakami-shogo.github.io/Web_Programming/Canvas-Simulations/analog-clock.html)
 
 時計を描画し、正午と午後6時に鐘の音が鳴ります。
 
 #### デモ（スクリーンショット）
 ![デモ](Canvas-Simulations/assets/images/analog-clock.png)
 
-- [人工衛星シミュレーション](https://murakami-shogo.github.io/Web_Programming/Canvas-Simulations/satellite-simulation.html)
+### 人工衛星シミュレーション
+[人工衛星シミュレーション](https://murakami-shogo.github.io/Web_Programming/Canvas-Simulations/satellite-simulation.html)
 
 重力下での衛星運動を描画し、距離・速度・エネルギーを表示します。
 
