@@ -53,7 +53,7 @@
 - 完成するとタイムが記録されます
 
 #### デモ（スクリーンショット）
-![デモ](slide-puzzle/assets/images/demo.png)
+![デモ](Slide-Puzzle/assets/images/demo.png)
 
 
 
