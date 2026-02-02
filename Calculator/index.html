@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>電卓</title>
+
+  <style>
+    body{
+      width: 1000px;
+      margin: auto;
+      background: linear-gradient(45deg, #e0ffff, #7fffd4);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
+    }
+    h2{
+      background: #fffaf4;
+      color: #010101;
+      border-left: solid 8px #e3bf00;
+      padding: 0.5em;
+    }
+
+    .wrap {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      justify-content: space-between;
+    }
+
+    .panel {
+      border: 5px solid #000;
+      background: #CCFFCC;
+      padding: 10px;
+    }
+
+    .display {
+      width: 380px;
+      height: 50px;
+      font-size: 20px;
+    }
+
+    .btn {
+      width: 60px;
+      height: 60px;
+      font-size: 30px;
+      cursor: pointer;
+    }
+    .btn-small {
+      font-size: 20px;
+    }
+    .btn-num {
+      background-color:#CCFFFF;
+    }
+    .btn-eq {
+      background-color:#FFCCFF;
+    }
+
+    .history-title {
+      font-size: 20pt;
+      text-align: center;
+      margin: 0 0 8px;
+    }
+    .history-input {
+      width: 450px;
+      height: 50px;
+      font-size: 20px;
+    }
+    .history-btn {
+      width: 120px;
+      height: 40px;
+      font-size: 20px;
+      cursor: pointer;
+    }
+
+    .spacer { height: 18px; }
+  </style>
+</head>
+
+<body>
+  <h2>電卓</h2>
+
+  <div class="wrap">
+    <!-- Calculator -->
+    <div class="panel">
+      <table border="0" cellpadding="0" cellspacing="5" align="center">
+        <tr align="center">
+          <td colspan="6">
+            <input id="expressionInput" class="display" type="text" inputmode="decimal" autocomplete="off" />
+          </td>
+        </tr>
+
+        <tr align="center">
+          <td><input class="btn" type="button" value="C"  onclick="Calculator.clearExpression()"></td>
+          <td><input class="btn" type="button" value="("  onclick="Calculator.append('(')"></td>
+          <td><input class="btn" type="button" value=")"  onclick="Calculator.append(')')"></td>
+          <td><input class="btn" type="button" value="/"  onclick="Calculator.append('/')"></td>
+          <td><input class="btn btn-small" type="button" value="BS" onclick="Calculator.backspace()"></td>
+          <td><input class="btn" type="button" value="sin" onclick="Calculator.applyUnary('sin')"></td>
+        </tr>
+
+        <tr align="center">
+          <td><input class="btn btn-num" type="button" value="7" onclick="Calculator.append('7')"></td>
+          <td><input class="btn btn-num" type="button" value="8" onclick="Calculator.append('8')"></td>
+          <td><input class="btn btn-num" type="button" value="9" onclick="Calculator.append('9')"></td>
+          <td><input class="btn" type="button" value="*" onclick="Calculator.append('*')"></td>
+          <td><input class="btn" type="button" value="x^2" onclick="Calculator.applyUnary('square')"></td>
+          <td><input class="btn" type="button" value="cos" onclick="Calculator.applyUnary('cos')"></td>
+        </tr>
+
+        <tr align="center">
+          <td><input class="btn btn-num" type="button" value="4" onclick="Calculator.append('4')"></td>
+          <td><input class="btn btn-num" type="button" value="5" onclick="Calculator.append('5')"></td>
+          <td><input class="btn btn-num" type="button" value="6" onclick="Calculator.append('6')"></td>
+          <td><input class="btn" type="button" value="-" onclick="Calculator.append('-')"></td>
+          <td><input class="btn" type="button" value="x^3" onclick="Calculator.applyUnary('cube')"></td>
+          <td><input class="btn" type="button" value="tan" onclick="Calculator.applyUnary('tan')"></td>
+        </tr>
+
+        <tr align="center">
+          <td><input class="btn btn-num" type="button" value="1" onclick="Calculator.append('1')"></td>
+          <td><input class="btn btn-num" type="button" value="2" onclick="Calculator.append('2')"></td>
+          <td><input class="btn btn-num" type="button" value="3" onclick="Calculator.append('3')"></td>
+          <td><input class="btn" type="button" value="+" onclick="Calculator.append('+')"></td>
+          <td><input class="btn" type="button" value="√" onclick="Calculator.applyUnary('sqrt')"></td>
+          <td><input class="btn" type="button" value="log" onclick="Calculator.applyUnary('log')"></td>
+        </tr>
+
+        <tr align="center">
+          <td><input class="btn btn-num" type="button" value="0"  onclick="Calculator.append('0')"></td>
+          <td><input class="btn btn-num" type="button" value="00" onclick="Calculator.append('00')"></td>
+          <td><input class="btn" type="button" value="." onclick="Calculator.append('.')"></td>
+          <td><input class="btn btn-eq" type="button" value="=" onclick="Calculator.evaluate()"></td>
+          <td><input class="btn" type="button" value="π" onclick="Calculator.insertPi()"></td>
+          <td><input class="btn" type="button" value="abs" onclick="Calculator.applyUnary('abs')"></td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- History -->
+    <div class="panel">
+      <div class="history-title">計算履歴</div>
+      <div>
+        <input class="history-input" id="h1" type="text" readonly><br>
+        <input class="history-input" id="h2" type="text" readonly><br>
+        <input class="history-input" id="h3" type="text" readonly><br>
+        <input class="history-input" id="h4" type="text" readonly><br>
+        <input class="history-input" id="h5" type="text" readonly><br>
+      </div>
+      <div class="spacer"></div>
+      <div style="text-align:center;">
+        <input class="history-btn" type="button" value="履歴削除" onclick="Calculator.clearHistory()">
+      </div>
+    </div>
+  </div>
+
+  <div style="clear:both;"></div>
+  <div style="height: 18px;"></div>
+
+  <h2>使用方法</h2>
+  <p>・ボタンのクリックまたはキーボード入力で計算できます。</p>
+  <p>・数式入力後、「＝」キーまたは Enter キーで結果を表示します。</p>
+  <p>・キーボード入力は半角のみ対応（数字、四則演算子、＝、括弧、小数点、Backspace）。</p>
+  <p>・log は自然対数、C は全消去、BS は1文字削除、π は円周率を表示します。</p>
+  <p>・計算履歴は 5 件まで。5 件埋まったらそれ以上は保存しません（履歴削除でリセット）。</p>
+
+<script>
+const Calculator = (() => {
+  "use strict";
+
+  const inputEl = document.getElementById("expressionInput");
+  const historyEls = [
+    document.getElementById("h1"),
+    document.getElementById("h2"),
+    document.getElementById("h3"),
+    document.getElementById("h4"),
+    document.getElementById("h5"),
+  ];
+
+  // 結果を保持（=のあとに続けて入力された時の挙動を元コードに合わせる）
+  let currentResultText = "";
+
+  // 履歴（最大5件・満杯なら追加しない）
+  const history = Array(5).fill("");
+  let historyIndex = 0;
+
+  // --- 安全な式評価（ホワイトリスト） ---
+  function isSafeExpression(expr) {
+    // 許可: 数字, 空白, . + - * / ( )
+    // これ以外が入っていたら計算しない（eval注入防止）
+    return /^[0-9+\-*/().\s]+$/.test(expr);
+  }
+
+  function evaluateExpression(expr) {
+    const trimmed = expr.trim();
+    if (!trimmed) throw new Error("式が空です");
+    if (!isSafeExpression(trimmed)) throw new Error("使用できない文字が含まれています");
+
+    // Function で評価（eval相当だが、上の検証で危険文字を弾く）
+    // eslint-disable-next-line no-new-func
+    const fn = new Function(`"use strict"; return (${trimmed});`);
+    const value = fn();
+
+    if (!Number.isFinite(value)) throw new Error("計算結果が不正です");
+    return value;
+  }
+
+  function renderHistory() {
+    for (let i = 0; i < 5; i++) historyEls[i].value = history[i] || "";
+  }
+
+  function addHistory(line) {
+    if (historyIndex >= 5) return; // 5件まで（仕様どおり）
+    history[historyIndex] = line;
+    historyIndex++;
+    renderHistory();
+  }
+
+  function clearExpression() {
+    inputEl.value = "";
+    currentResultText = "";
+  }
+
+  function append(text) {
+    // 直前が結果表示状態なら、まず結果に戻して追記
+    if (currentResultText !== "") {
+      inputEl.value = currentResultText;
+      currentResultText = "";
+    }
+    inputEl.value += text;
+    inputEl.focus();
+  }
+
+  function backspace() {
+    currentResultText = "";
+    inputEl.value = inputEl.value.slice(0, -1);
+    inputEl.focus();
+  }
+
+  function evaluate() {
+    if (currentResultText !== "") return; // 既に結果表示中は何もしない
+    try {
+      const result = evaluateExpression(inputEl.value);
+      currentResultText = String(result);
+      const line = `${inputEl.value}=${currentResultText}`;
+      inputEl.value = line;
+      addHistory(line);
+    } catch (e) {
+      alert(e.message || "計算できませんでした");
+    }
+  }
+
+  function applyUnary(type) {
+    if (currentResultText !== "") {
+      // 結果がある場合はそれを対象にする
+    } else {
+      // 結果がないなら式を評価してから対象にする
+    }
+
+    try {
+      const baseValue = (currentResultText !== "")
+        ? Number(currentResultText)
+        : evaluateExpression(inputEl.value);
+
+      let result;
+      let label;
+
+      switch (type) {
+        case "sqrt":
+          result = Math.sqrt(baseValue);
+          label = `√${baseValue}`;
+          break;
+        case "square":
+          result = Math.pow(baseValue, 2);
+          label = `${baseValue}^2`;
+          break;
+        case "cube":
+          result = Math.pow(baseValue, 3);
+          label = `${baseValue}^3`;
+          break;
+        case "sin":
+          result = Math.sin(baseValue);
+          label = `sin${baseValue}`;
+          break;
+        case "cos":
+          result = Math.cos(baseValue);
+          label = `cos${baseValue}`;
+          break;
+        case "tan":
+          result = Math.tan(baseValue);
+          label = `tan${baseValue}`;
+          break;
+        case "log":
+          result = Math.log(baseValue); // 自然対数
+          label = `log${baseValue}`;
+          break;
+        case "abs":
+          result = Math.abs(baseValue);
+          label = `|${baseValue}|`;
+          break;
+        default:
+          return;
+      }
+
+      if (!Number.isFinite(result)) throw new Error("計算結果が不正です");
+
+      currentResultText = String(result);
+      const line = `${label}=${currentResultText}`;
+      inputEl.value = line;
+      addHistory(line);
+    } catch (e) {
+      alert(e.message || "計算できませんでした");
+    }
+  }
+
+  function insertPi() {
+    if (currentResultText !== "") {
+      inputEl.value = currentResultText;
+      currentResultText = "";
+    }
+    const value = Math.PI;
+    const line = `π=${value}`;
+    inputEl.value = line;
+    addHistory(line);
+  }
+
+  function clearHistory() {
+    for (let i = 0; i < 5; i++) history[i] = "";
+    historyIndex = 0;
+    renderHistory();
+  }
+
+  // キーボード操作
+  inputEl.addEventListener("keydown", (e) => {
+    // Enter or '=' で計算
+    if (e.key === "Enter" || e.key === "=") {
+      e.preventDefault();
+      evaluate();
+      return;
+    }
+
+    // キー入力制限：数字・演算子・括弧・小数点・Backspace はOK
+    // それ以外は入力させない（注入防止）
+    const allowed = /^[0-9+\-*/().]$/;
+    const controlKeys = ["Backspace", "Delete", "ArrowLeft", "ArrowRight", "Home", "End", "Tab"];
+
+    if (controlKeys.includes(e.key)) return;
+    if (allowed.test(e.key)) return;
+
+    e.preventDefault();
+  });
+
+  return {
+    clearExpression,
+    append,
+    backspace,
+    evaluate,
+    applyUnary,
+    insertPi,
+    clearHistory,
+  };
+})();
+</script>
+
+</body>
+</html>
