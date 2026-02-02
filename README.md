@@ -1,4 +1,6 @@
 # Web_Programming
+- [電卓](https://murakami-shogo.github.io/Web_Programming/Calculator/index.html)
+
 - [モグラ叩きゲーム](https://murakami-shogo.github.io/Web_Programming/Whack-a-Mole/index.html)
 
 - [スライドパズル](https://murakami-shogo.github.io/Web_Programming/Slide-Puzzle/slide-puzzle.html)
@@ -12,6 +14,18 @@
 - [人工衛星シミュレーション](https://murakami-shogo.github.io/Web_Programming/Canvas-Simulations/satellite-simulation.html)
 
 - [レースゲーム](https://murakami-shogo.github.io/Web_Programming/Racing-Game/index.html)
+
+
+## 電卓（科学電卓）
+[電卓](https://murakami-shogo.github.io/Web_Programming/Calculator/index.html)
+
+ブラウザで動く電卓です。  
+四則演算に加えて √、累乗、三角関数、自然対数、絶対値、π表示に対応しています。  
+計算履歴は最大5件まで表示できます。
+
+### デモ（スクリーンショット）
+![デモ](Calculator/assets/images/demo.png)
+
 
 
 ## モグラ叩きゲーム
